@@ -100,12 +100,16 @@ root.style.setProperty('--img', 'url("' + IMG + '")');
 
 /* ---------- масштаб под размер окна ---------- */
 const stage = document.getElementById('stage');
+const CROP = { x: 52, y: 28, w: 1170, h: 516 };   // границы самого камина в картинке
 function fit() {
-  const s = Math.min(innerWidth / 1280, innerHeight / 602);
-  const x = (innerWidth - 1280 * s) / 2, y = (innerHeight - 602 * s) / 2;
+  const vw = document.documentElement.clientWidth || innerWidth, vh = document.documentElement.clientHeight || innerHeight;
+  const s = Math.min(vw / CROP.w, vh / CROP.h);
+  const x = (vw - CROP.w * s) / 2 - CROP.x * s, y = (vh - CROP.h * s) / 2 - CROP.y * s;
   stage.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+  if (window.setRes) setRes(s);
 }
-addEventListener('resize', fit); fit();
+addEventListener('resize', fit);
+if (window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement);
 
 /* ---------- состояние огня ---------- */
 const LEVELS = [0, 0.2, 0.4, 0.6, 0.8, 1.0];   // 0 = выключен
@@ -133,13 +137,12 @@ setLevel(level);
 /* ---------- холст: стенка + огонь ---------- */
 const cv = document.getElementById('fire');
 const ctx = cv.getContext('2d');
-const SC = 2, W = 710, H = 140;          // локальные координаты = сцена − (285, 310)
-ctx.scale(SC, SC);
+let SC = 2; const W = 710, H = 140;      // локальные координаты = сцена − (285, 310)
 
 // Задняя стенка: закопчённый шамотный кирпич
 const wall = document.createElement('canvas');
-wall.width = W * SC; wall.height = H * SC;
-(function drawWall() {
+function drawWall() {
+  wall.width = W * SC; wall.height = H * SC;
   const g = wall.getContext('2d'); g.scale(SC, SC);
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   g.fillStyle = '#120b08'; g.fillRect(0, 0, W, H);
@@ -168,7 +171,17 @@ wall.width = W * SC; wall.height = H * SC;
   gr.addColorStop(0, 'rgba(0,0,0,.85)'); gr.addColorStop(.14, 'rgba(0,0,0,0)');
   gr.addColorStop(.86, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.85)');
   g.fillStyle = gr; g.fillRect(0, 0, W, H);
-})();
+}
+// чёткость холста растёт вместе с размером камина
+function setRes(scale) {
+  const n = Math.min(5, Math.max(2, Math.ceil(scale * (window.devicePixelRatio || 1))));
+  if (n === SC && cv.width === W * SC) return;
+  SC = n; cv.width = W * SC; cv.height = H * SC;
+  ctx.setTransform(SC, 0, 0, SC, 0, 0); drawWall();
+}
+window.setRes = setRes;
+ctx.setTransform(SC, 0, 0, SC, 0, 0); drawWall();
+setRes(1); fit();
 
 // Спрайты языков пламени по «возрасту» частицы
 const STOPS = [[0, 255, 238, 170], [.28, 255, 175, 50], [.6, 238, 85, 14], [1, 110, 18, 4]];
